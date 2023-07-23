@@ -17,6 +17,25 @@ function apiListTasks() {
     )
 }
 
+function apiDeleteTasks(taskId) {
+    return fetch(
+        apihost + '/api/tasks/' + taskId,
+        {
+            method: 'DELETE',
+            headers: {
+                Authorization: apikey
+            }
+        }
+    ).then(
+        function(resp) {
+            if(!resp.ok) {
+                alert('Wystąpił błąd! Otwórz devtools i zakładkę Sieć/Network, i poszukaj przyczyny');
+            }
+            return resp.json();
+        }
+    )
+}
+
 function apiListOperationsForTask(taskId) {
     return fetch(
         apihost + '/api/tasks/' + taskId + '/operations',
@@ -26,7 +45,7 @@ function apiListOperationsForTask(taskId) {
     ).then(
         function(resp) {
             if(!resp.ok) {
-                alert('Wystąpił błąd! Otwórz devtools i zakładkę Sieć/Network, i poszukaj przyczyny');
+                alert('apiListOperationsForTask');
             }
             return resp.json();
         }
@@ -38,13 +57,7 @@ function renderProperTime(timeInMinutes){
     return parseInt(hours) > 0 ? hours +"h " + minutes +"m" : minutes +"m";
 }
 
-
 function renderTask(taskId, title, description, status) {
-    // console.log('Zadanie o id :', taskId);
-    // console.log('tytuł to:', title);
-    // console.log('opis to:', description);
-    // console.log('status to:', status);
-    // console.log('*'.repeat(50));
     const main = document.querySelector("#app");
     const section = document.createElement("section");
     section.className = "card mt-5 shadow-sm";
@@ -72,39 +85,74 @@ function renderTask(taskId, title, description, status) {
     deleteButton.className = "btn btn-outline-danger btn-sm ml-2";
     deleteButton.innerText = 'Delete';
     buttonDiv.appendChild(deleteButton);
+    deleteButton.addEventListener("click", function (event){
+        apiDeleteTasks(taskId)
+            .then( function (resp){
+                section.remove();
+            });
+    }); // usunięcie taska
     const ul = document.createElement("ul");
     ul.className = "list-group list-group-flush";
     section.appendChild(ul);
-    apiListOperationsForTask(taskId).then(resp => resp.data.forEach(function (el){
-        renderOperation(ul, status, el.id, el.description, el.timeSpent);
-        console.log(el);
-    }))
+
+    apiListOperationsForTask(taskId).then(resp => {
+        if (resp.data.length > 0){
+            resp.data.forEach(function (el){
+                renderOperation(ul, status, el.task.id, el.description, el.timeSpent);
+            });
+        }
+    });
+    if( status === 'open') {
+        const divOperationAdd = document.createElement('div');
+        divOperationAdd.classList.add('card-body'); // tutaj może być wyjebka
+        section.appendChild(divOperationAdd);
+        const form = document.createElement('form');
+        divOperationAdd.appendChild(form);
+        const divInput = document.createElement('div');
+        divInput.className = "input-group";
+        form.appendChild(divInput);
+        const input = document.createElement('input');
+        input.type = "text";
+        input.placeholder = "Operation description";
+        input.className = "form-control";
+        input.minLength = 5;
+        divInput.appendChild(input);
+        const divInputButton = document.createElement('div');
+        divInputButton.className = "input-group-append";
+        divInput.appendChild(divInputButton);
+        const inputButton = document.createElement('button');
+        inputButton.className = "btn btn-info";
+        inputButton.innerText = "Add";
+        divInputButton.appendChild(inputButton);
+        form.addEventListener('submit', function (event){
+            event.preventDefault();
+            const operationDescription = event.currentTarget.firstElementChild.firstElementChild.value;
+            event.currentTarget.firstElementChild.firstElementChild.value = "";
+            apiCreateOperationForTask(taskId, operationDescription)
+                .then(function (resp){
+                    renderOperation(ul, status, resp.data.id, resp.data.description, resp.data.timeSpent);
+                });
+        });
+
+    }
 
 
 }
 
 
-// <section className="card mt-5 shadow-sm">-->
-//     <!--    <div class="card-header d-flex justify-content-between align-items-center">-->
-//     <!--      <div>-->
-//     <!--        <h5>Przykład zamkniętego zadania</h5>-->
-//     <!--        <h6 class="card-subtitle text-muted">Zamknięte zadanie da się tylko usunąć</h6>-->
-//     <!--      </div>-->
-//     <!--      <div>-->
-//                 <button className="btn btn-dark btn-sm">Finish</button>-- >
-//     <!--        <button class="btn btn-outline-danger btn-sm ml-2">Delete</button>-->
-//     <!--      </div>-->
-//     <!--    </div>-->
-//     <!--    <ul class="list-group list-group-flush">-->
+//<div class="card-body">-->
+// <!--      <form>-->
+// <!--        <div class="input-group">-->
+// <!--          <input type="text" placeholder="Operation description" class="form-control" minlength="5">-->
+// <!--          <div class="input-group-append">-->
+// <!--            <button class="btn btn-info">Add</button>-->
+// <!--          </div>-->
+// <!--        </div>-->
+// <!--      </form>-->
+// <!--    </div>-->
+// <!--  </section>-->
 
 function renderOperation(ul, status, id, description, timeSpent){
-    console.log(status);
-    console.log(id);
-    console.log(description);
-    console.log(timeSpent);
-    console.log(ul);
-
-
     const li = document.createElement("li");
     li.className = "list-group-item d-flex justify-content-between align-items-center";
     ul.appendChild(li);
@@ -175,13 +223,35 @@ function apiCreateTask(title, description) {
         }
     )
 }
+// /api/tasks/:id/operations
+function apiCreateOperationForTask(taskId, description) {
+    return fetch(
+        apihost + '/api/tasks/' + taskId + "/operations",
+        {
+            method: 'POST',
+            headers: { Authorization: apikey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: description, timeSpent: 0 })
+
+        }
+    ).then(
+        function(resp) {
+            if(!resp.ok) {
+                alert('Wystąpił błąd! Otwórz devtools i zakładkę Sieć/Network, i poszukaj przyczyny');
+            }
+            return resp.json();
+        }
+    )
+}
 
 function addTask(event){
     event.preventDefault();
     const title = event.target.children[0].firstElementChild.value;
     const description = event.target.children[1].firstElementChild.value;
+    event.target.children[0].firstElementChild.value = "";
+    event.target.children[1].firstElementChild.value = "";
     if( title.length >= 5 && description.length >= 5) {
         apiCreateTask(title, description)
+            .then( resp =>  renderTask( resp.data.id, resp.data.title, resp.data.description, resp.data.status))
             .catch( resp => console.log(resp));
     }
 
@@ -198,6 +268,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     apiListTasks()
         .then(resp => resp.data.forEach(function (el){
+            console.log(resp);
             renderTask(el.id, el.title, el.description, el.status);
         }));
 
